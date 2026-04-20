@@ -9,9 +9,9 @@ export const createCheckoutLinkTool = {
     "seating area and time slot. Use this after searching availability to get " +
     "a direct booking link.",
   inputSchema: {
-    restaurantName: z
+    venue_id: z
       .string()
-      .describe("Restaurant name to search for (e.g., 'Radler', 'Chacoli')"),
+      .describe("Ontopo venue slug from search_restaurant_availability result."),
     date: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -41,31 +41,18 @@ export const createCheckoutLinkTool = {
   },
 
   async execute({
-    restaurantName,
+    venue_id,
     date,
     time,
     partySize,
     areaPreference,
     locale,
   }) {
-    // Step 1: Search for the restaurant
-    const venues = await ontopoClient.searchVenues(restaurantName, locale);
-
-    if (!venues || venues.length === 0) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `No restaurants found matching "${restaurantName}".`,
-          },
-        ],
-      };
-    }
-
-    const venue = venues[0];
+    // Step 1: Use venue_id (slug) from search_restaurant_availability
+    const resolvedSlug = venue_id;
 
     // Step 2: Get venue profile to find reservation page
-    const profile = await ontopoClient.getVenueProfile(venue.slug, locale);
+    const profile = await ontopoClient.getVenueProfile(resolvedSlug, locale);
     const reservationPages = (profile.pages || []).filter(
       (p) => p.content_type === "reservation"
     );
@@ -75,7 +62,7 @@ export const createCheckoutLinkTool = {
         content: [
           {
             type: "text",
-            text: `Restaurant "${venue.title}" does not accept online reservations.`,
+            text: `Restaurant "${profile.title}" does not accept online reservations.`,
           },
         ],
       };
@@ -90,7 +77,7 @@ export const createCheckoutLinkTool = {
       time,
       partySize,
       locale,
-      venue.slug
+      resolvedSlug
     );
 
     if (!availData?.areas || availData.areas.length === 0) {
@@ -98,7 +85,7 @@ export const createCheckoutLinkTool = {
         content: [
           {
             type: "text",
-            text: `No availability found for ${venue.title} on ${date} at ${time}.`,
+            text: `No availability found for ${profile.title} on ${date} at ${time}.`,
           },
         ],
       };
@@ -145,7 +132,7 @@ export const createCheckoutLinkTool = {
         content: [
           {
             type: "text",
-            text: `No bookable areas found for ${venue.title} on ${date} at ${time}.`,
+            text: `No bookable areas found for ${profile.title} on ${date} at ${time}.`,
           },
         ],
       };
@@ -191,7 +178,7 @@ export const createCheckoutLinkTool = {
       selectedArea.id,
       availData.availability_id,
       locale,
-      venue.slug
+      resolvedSlug
     );
 
     const checkoutUrl = `https://s1.ontopo.com/${locale}/checkout/${checkoutId}`;
@@ -202,14 +189,14 @@ export const createCheckoutLinkTool = {
           type: "text",
           text: JSON.stringify(
             {
-              restaurant: venue.title,
+              restaurant: profile.title,
               address: profile.address,
               phone: profile.phone,
               date,
               time: `${selectedTime.slice(0, 2)}:${selectedTime.slice(2)}`,
               partySize,
               area: selectedArea.name,
-              checkoutUrl,
+              bookingUrl: checkoutUrl,
               expiresIn: "This link expires in 15 minutes",
             },
             null,

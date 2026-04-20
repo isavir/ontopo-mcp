@@ -85,12 +85,13 @@ export const searchAvailabilityTool = {
         }
 
         const result = {
+          source: "ontopo",
           name: profile.title || venue.title,
           address: profile.address || venue.address,
           phone: profile.phone || null,
           priceRange: profile.venue_price || null,
           pageSlug: page.slug,
-          venueSlug: venue.slug,
+          venue_id: venue.slug,
         };
 
         // Process availability response
