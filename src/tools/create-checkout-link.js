@@ -187,21 +187,17 @@ export const createCheckoutLinkTool = {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              restaurant: profile.title,
-              address: profile.address,
-              phone: profile.phone,
-              date,
-              time: `${selectedTime.slice(0, 2)}:${selectedTime.slice(2)}`,
-              partySize,
-              area: selectedArea.name,
-              bookingUrl: checkoutUrl,
-              expiresIn: "This link expires in 15 minutes",
-            },
-            null,
-            2
-          ),
+          text: JSON.stringify({
+            restaurant: profile.title,
+            address: profile.address,
+            phone: profile.phone,
+            date,
+            time: `${selectedTime.slice(0, 2)}:${selectedTime.slice(2)}`,
+            partySize,
+            area: selectedArea.name,
+            bookingUrl: checkoutUrl,
+            expiresIn: "This link expires in 15 minutes",
+          }),
         },
       ],
     };

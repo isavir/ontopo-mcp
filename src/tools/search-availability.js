@@ -179,17 +179,13 @@ export const searchAvailabilityTool = {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              query: restaurantName,
-              date,
-              time,
-              partySize,
-              results,
-            },
-            null,
-            2
-          ),
+          text: JSON.stringify({
+            query: restaurantName,
+            date,
+            time,
+            partySize,
+            results,
+          }),
         },
       ],
     };
