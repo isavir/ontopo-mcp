@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ontopoClient } from "../api/ontopo-client.js";
+import { readAvailability } from "../availability.js";
 
 export const searchAvailabilityTool = {
   name: "search_restaurant_availability",
@@ -94,61 +95,8 @@ export const searchAvailabilityTool = {
           venue_id: venue.slug,
         };
 
-        // Process availability response
-        if (availabilityData?.page && availabilityData?.areas) {
-          // Format areas with time slots
-          const areas = availabilityData.areas.map((area) => ({
-            id: area.id,
-            name: area.name,
-            icon: area.icon,
-            description: area.text || null,
-            score: area.score, // 1=best, 5=unavailable
-            timeSlots: area.options.map((opt) => {
-              // Format HHMM to HH:MM
-              const formattedTime = `${opt.time.slice(0, 2)}:${opt.time.slice(2)}`;
-              return {
-                time: formattedTime,
-                timeValue: opt.time,
-                method: opt.method, // seat, standby, disabled, phone, etc.
-                status: opt.text || getStatusText(opt.method),
-                score: opt.score,
-                bookable: opt.method === "seat",
-                waitlist: opt.method === "standby",
-              };
-            }),
-          }));
-
-          // Get recommended slots
-          const recommended =
-            availabilityData.recommended?.map((rec) => ({
-              area: rec.text || rec.id,
-              areaId: rec.id,
-              time: `${rec.time.slice(0, 2)}:${rec.time.slice(2)}`,
-              method: rec.method,
-            })) || [];
-
-          result.availability = {
-            available: areas.some((a) =>
-              a.timeSlots.some((t) => t.bookable)
-            ),
-            title: availabilityData.page?.title || null,
-            subtitle: availabilityData.page?.subtitle || null,
-            areas,
-            recommended,
-          };
-        } else if (availabilityData?.availability_id) {
-          // Minimal response - no detailed availability
-          result.availability = {
-            available: true,
-            message: "Availability confirmed, but no time slot details available",
-            availabilityId: availabilityData.availability_id,
-          };
-        } else {
-          result.availability = {
-            available: false,
-            reason: "Could not load availability data",
-          };
-        }
+        // Process availability response (phone-only venues say so; no slots is never "available")
+        result.availability = readAvailability(availabilityData, result.phone);
 
         // Add additional reservation pages if venue has multiple
         if (reservationPages.length > 1) {
@@ -191,19 +139,3 @@ export const searchAvailabilityTool = {
     };
   },
 };
-
-/**
- * Get human-readable status text from booking method
- */
-function getStatusText(method) {
-  const statusMap = {
-    seat: "Book now",
-    standby: "Waiting list",
-    disabled: "Unavailable",
-    phone: "Call to book",
-    walkin: "Walk-in only",
-    callback: "Request callback",
-    link: "External booking",
-  };
-  return statusMap[method] || method;
-}

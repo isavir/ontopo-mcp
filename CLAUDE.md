@@ -8,6 +8,7 @@ MCP server providing restaurant availability search and reservation links for On
 
 - `npm start` or `node src/index.js` — run the MCP server
 - `npm install` — install dependencies
+- `npm test` — unit tests (`node --test`, no extra dependencies)
 
 ## Project Structure
 
@@ -15,6 +16,7 @@ MCP server providing restaurant availability search and reservation links for On
 src/index.js                  — MCP server, registers tools, stdio transport
 src/api/ontopo-client.js      — HTTP client: venue search, profile, page content, availability, checkout, JWT auth
 src/tools/search-availability.js — search_restaurant_availability tool
+src/availability.js           — reads one availability_search answer (pure; tested in test/)
 src/tools/create-checkout-link.js — create_checkout_link tool (direct booking URLs)
 src/utils/shift-parser.js     — Computes time slots from Ontopo shift data (deprecated in v0.2.0)
 ```
@@ -25,6 +27,7 @@ src/utils/shift-parser.js     — Computes time slots from Ontopo shift data (de
 - **Compact date/time formats**: The availability API requires `YYYYMMDD` and `HHMM` — formatted versions (`YYYY-MM-DD`, `HH:MM`) return incomplete data without areas
 - **Real-time availability**: `POST /api/availability_search` with compact formats returns areas (Bar, Terrace, etc.) with time slots showing booking status (seat/standby/disabled)
 - **Checkout flow**: A second `availability_search` call with `area` + `availability_id` creates a checkout session, returning a `checkout_id` for `https://s1.ontopo.com/{locale}/checkout/{id}`
+- **Phone-only venues**: `availability_search` answers `method: "phone"` with no areas → `availability: {available: false, phone_only: true, phone}`. An answer without areas is never `available: true`
 - **Tags**: Defined in shift data `shifts.tags`, used to mark closed days (`action: "disabled"`), special events, or size restrictions
 
 ## Ontopo API Endpoints
@@ -44,4 +47,4 @@ src/utils/shift-parser.js     — Computes time slots from Ontopo shift data (de
 - No TypeScript, no build step
 - Tools export `{ name, description, inputSchema, execute }` objects
 - Zod for input validation
-- No test framework currently
+- Tests: `node:test` in `test/`, for pure modules only (no network)
