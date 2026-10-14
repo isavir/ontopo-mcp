@@ -182,6 +182,8 @@ export const createCheckoutLinkTool = {
     );
 
     const checkoutUrl = `https://s1.ontopo.com/${locale}/checkout/${checkoutId}`;
+    // Does this checkout ask for a card / an SMS code? (null when the page can't be read)
+    const info = await ontopoClient.getCheckoutInfo(checkoutId);
 
     return {
       content: [
@@ -196,6 +198,9 @@ export const createCheckoutLinkTool = {
             partySize,
             area: selectedArea.name,
             bookingUrl: checkoutUrl,
+            checkout_id: checkoutId,
+            needCredit: info ? info.needCredit : null,
+            skipVerification: info ? info.skipVerification : null,
             expiresIn: "This link expires in 15 minutes",
           }),
         },
