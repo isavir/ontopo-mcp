@@ -20,7 +20,6 @@ src/availability.js           — reads one availability_search answer (pure; te
 src/tools/create-checkout-link.js — create_checkout_link tool (direct booking URLs; also checkout_id, needCredit, skipVerification)
 src/book.js                   — book_table / cancel_booking logic (pure, injectable client; tested in test/)
 src/tools/book-table.js, src/tools/cancel-booking.js — book in chat after the user confirmed (Kvali KVA-92)
-src/utils/shift-parser.js     — Computes time slots from Ontopo shift data (deprecated in v0.2.0)
 ```
 
 ## Key Concepts
