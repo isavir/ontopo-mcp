@@ -207,7 +207,7 @@ class OntopoClient {
   async getCheckoutInfo(checkoutId) {
     try {
       const res = await fetch(`${CHECKOUT_BASE}/he/checkout/${encodeURIComponent(checkoutId)}`,
-        { signal: AbortSignal.timeout(WRITE_TIMEOUT_MS) });
+        { headers: { Accept: "text/html" }, signal: AbortSignal.timeout(WRITE_TIMEOUT_MS) });
       return res.ok ? readCheckoutPage(await res.text()) : null;
     } catch (err) {
       console.error(`[ontopo] checkout page failed: ${err.message}`);
