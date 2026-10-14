@@ -18,7 +18,6 @@ src/api/ontopo-client.js      — HTTP client: venue search, profile, page conte
 src/tools/search-availability.js — search_restaurant_availability tool
 src/availability.js           — reads one availability_search answer (pure; tested in test/)
 src/tools/create-checkout-link.js — create_checkout_link tool (direct booking URLs)
-src/utils/shift-parser.js     — Computes time slots from Ontopo shift data (deprecated in v0.2.0)
 ```
 
 ## Key Concepts

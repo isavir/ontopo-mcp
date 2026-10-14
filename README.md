@@ -81,8 +81,6 @@ src/
   tools/
     search-availability.js     # search_restaurant_availability tool
     create-checkout-link.js    # create_checkout_link tool
-  utils/
-    shift-parser.js            # Time slot computation from shift data (deprecated)
 ```
 
 ### How it works
