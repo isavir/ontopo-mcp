@@ -1,4 +1,8 @@
 const API_BASE = "https://ontopo.com/api";
+// The checkout and ticket pages' own API hosts (KVA-92 spike, docs in kvali-poc docs/providers/ontopo-booking.md)
+const CHECKOUT_BASE = "https://s1.ontopo.com";
+const TICKET_BASE = "https://s2.ontopo.com";
+const WRITE_TIMEOUT_MS = 10_000;
 const DISTRIBUTOR_SLUG = "15171493";
 const DISTRIBUTOR_VERSION = 7738;
 const TOKEN_REFRESH_MARGIN_MS = 60_000; // refresh 1 min before expiry
@@ -184,6 +188,77 @@ class OntopoClient {
     return res.json();
   }
 
+
+  // ── Booking in chat (KVA-92). Writes never throw and never return the raw answer. ──
+
+  async _post(url, body) {
+    const token = await this._ensureToken();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json, text/plain, */*", token },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
+    });
+    const data = await res.json().catch(() => null);
+    return res.ok && data?.statusCode === 200 ? data : null;
+  }
+
+  /** The checkout page's server-rendered settings: {needCredit, skipVerification, expiresIn} or null. */
+  async getCheckoutInfo(checkoutId) {
+    try {
+      const res = await fetch(`${CHECKOUT_BASE}/he/checkout/${encodeURIComponent(checkoutId)}`,
+        { signal: AbortSignal.timeout(WRITE_TIMEOUT_MS) });
+      return res.ok ? readCheckoutPage(await res.text()) : null;
+    } catch (err) {
+      console.error(`[ontopo] checkout page failed: ${err.message}`);
+      return null;
+    }
+  }
+
+  /** The guest's details on a checkout. True when ontopo accepted them. */
+  async checkoutContact(payload) {
+    try {
+      return Boolean(await this._post(`${CHECKOUT_BASE}/api/checkoutContact`, payload));
+    } catch (err) {
+      console.error(`[ontopo] checkoutContact failed: ${err.message}`);
+      return false;
+    }
+  }
+
+  /** Completes the booking: {ticketId, ticketUrl} or null. */
+  async checkoutComplete(payload) {
+    try {
+      const data = await this._post(`${CHECKOUT_BASE}/api/checkoutComplete`, payload);
+      const { ticketId, ticketUrl } = data?.data || {};
+      return ticketId && ticketUrl ? { ticketId, ticketUrl } : null;
+    } catch (err) {
+      console.error(`[ontopo] checkoutComplete failed: ${err.message}`);
+      return null;
+    }
+  }
+
+  /** An action on a booking's ticket (e.g. "cancel"). True when ontopo accepted it. */
+  async ticketReply(ticketId, action) {
+    try {
+      return Boolean(await this._post(`${TICKET_BASE}/api/ticketReply`, { action, ticketId, data: null }));
+    } catch (err) {
+      console.error(`[ontopo] ticketReply ${action} failed: ${err.message}`);
+      return false;
+    }
+  }
+}
+
+/** Reads the flags the checkout page is rendered with; null when they aren't there (expired, changed). */
+export function readCheckoutPage(html) {
+  const flag = (name) => {
+    const m = html.match(new RegExp(`"${name}":(true|false)`));
+    return m ? m[1] === "true" : null;
+  };
+  const needCredit = flag("needCredit");
+  const skipVerification = flag("skipVerification");
+  if (needCredit === null || skipVerification === null) return null;
+  const exp = html.match(/"expiration":(\d+)/);
+  return { needCredit, skipVerification, expiresIn: exp ? Number(exp[1]) : null };
 }
 
 export const ontopoClient = new OntopoClient();
