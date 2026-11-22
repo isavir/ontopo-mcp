@@ -1,7 +1,7 @@
 // node --test test/  (npm test)
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { bookTable, cancelBooking, openCheckout, pickArea, readCheckoutPage, toLocalPhone } from "../src/book.js";
+import { bookTable, cancelBooking, openCheckout, pickArea, prefillCheckout, readCheckoutPage, toLocalPhone } from "../src/book.js";
 import { ontopoClient } from "../src/api/ontopo-client.js";
 
 const CUSTOMER = { first_name: "Dana", last_name: "Levi", phone: "+972501234567", email: "dana@example.com" };
@@ -41,9 +41,10 @@ test("pickArea: the asked area at the exact time; never ontopo's recommended tim
 });
 
 test("openCheckout: the tapped time and area; the card rule comes with it", async () => {
-  const c = fakeClient({ info: { needCredit: true, skipVerification: true } });
+  const c = fakeClient({ info: { needCredit: true, skipVerification: true, expiresIn: 590 } });
   const out = await openCheckout(ARGS, c);
-  assert.deepEqual(out, { status: "ready", checkout_id: "ck1", needCredit: true, skipVerification: true, area: "בפנים" });
+  assert.deepEqual(out, { status: "ready", checkout_id: "ck1", needCredit: true, skipVerification: true,
+    expiresIn: 590, area: "בפנים" });
   assert.deepEqual(c.calls.checkout, [["95480596", "2026-10-20", "1845", 2, "בפנים", "av1", "he", "67408975"]]);
 });
 
@@ -107,6 +108,68 @@ test("bad input (no email, no phone, bad date) is refused before any call", asyn
 
 test("the answer carries no guest details", async () => {
   const out = JSON.stringify(await bookTable(ARGS, fakeClient()));
+  for (const v of ["Dana", "Levi", "501234567", "dana@"]) assert.ok(!out.includes(v), v);
+});
+
+// ── prefill: the guest's details on a card venue's checkout, never completed ─
+
+const CARD = { needCredit: true, skipVerification: true, expiresIn: 590 };
+
+test("prefill: card venue → contact sent, link returned, checkoutComplete never called", async () => {
+  const c = fakeClient({ info: CARD });
+  const out = await prefillCheckout(ARGS, c);
+  assert.deepEqual(out, { status: "prefilled", checkout_url: "https://s1.ontopo.com/he/checkout/ck1", expires_in: 590 });
+  assert.deepEqual(c.calls.contact, [{ first_name: "Dana", last_name: "Levi", email: "dana@example.com",
+    phone: "0501234567", region_code: "il", checkout_id: "ck1" }]);
+  assert.deepEqual(c.calls.complete, []);
+  assert.deepEqual(c.calls.checkout, [["95480596", "2026-10-20", "1845", 2, "בפנים", "av1", "he", "67408975"]]);
+});
+
+test("prefill: the link has the asked locale; no expiry known → null", async () => {
+  const out = await prefillCheckout({ ...ARGS, locale: "en" }, fakeClient({ info: { needCredit: true, skipVerification: true } }));
+  assert.deepEqual(out, { status: "prefilled", checkout_url: "https://s1.ontopo.com/en/checkout/ck1", expires_in: null });
+});
+
+test("prefill: a venue without a card → no_card, nothing sent to it", async () => {
+  const c = fakeClient();
+  assert.deepEqual(await prefillCheckout(ARGS, c), { status: "no_card" });
+  assert.deepEqual(c.calls.contact, []);
+  assert.deepEqual(c.calls.complete, []);
+});
+
+test("prefill: an SMS code is asked → needs_verification, nothing sent", async () => {
+  const c = fakeClient({ info: { needCredit: true, skipVerification: false } });
+  assert.deepEqual(await prefillCheckout(ARGS, c), { status: "needs_verification" });
+  assert.deepEqual(c.calls.contact, []);
+});
+
+test("prefill: contact refused → failed; time gone → slot_taken; checkout can't be opened → failed", async () => {
+  const noContact = fakeClient({ info: CARD, contact: false });
+  assert.deepEqual(await prefillCheckout(ARGS, noContact), { status: "failed" });
+  assert.deepEqual(noContact.calls.complete, []);
+  assert.deepEqual(await prefillCheckout({ ...ARGS, time: "20:00" }, fakeClient({ info: CARD })), { status: "slot_taken" });
+  assert.deepEqual(await prefillCheckout(ARGS, fakeClient({ info: CARD, checkoutFails: true })), { status: "failed" });
+});
+
+test("prefill: bad input is refused before any call", async () => {
+  const c = fakeClient({ info: CARD });
+  assert.deepEqual(await prefillCheckout({ ...ARGS, customer: { ...CUSTOMER, email: "" } }, c), { status: "failed" });
+  assert.deepEqual(await prefillCheckout({ ...ARGS, customer: { ...CUSTOMER, phone: "12" } }, c), { status: "failed" });
+  assert.deepEqual(await prefillCheckout({ ...ARGS, date: "20/10" }, c), { status: "failed" });
+  assert.deepEqual(c.calls.checkout, []);
+  assert.deepEqual(c.calls.contact, []);
+});
+
+test("prefill: an open checkout_id is reused like book_table does", async () => {
+  const c = fakeClient({ info: CARD });
+  const out = await prefillCheckout({ ...ARGS, checkout_id: "ckOld" }, c);
+  assert.deepEqual(c.calls.checkout, []);
+  assert.equal(out.checkout_url, "https://s1.ontopo.com/he/checkout/ckOld");
+  assert.equal(c.calls.contact[0].checkout_id, "ckOld");
+});
+
+test("prefill: the answer carries no guest details", async () => {
+  const out = JSON.stringify(await prefillCheckout(ARGS, fakeClient({ info: CARD })));
   for (const v of ["Dana", "Levi", "501234567", "dana@"]) assert.ok(!out.includes(v), v);
 });
 

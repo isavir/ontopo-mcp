@@ -2,7 +2,9 @@
 // The chain is what ontopo's own checkout page does: a checkout for the exact slot (as
 // create_checkout_link) → the page's settings (card? SMS code?) → checkoutContact → checkoutComplete.
 // Checkouts that ask for a card or an SMS code are never completed here.
-// Answers carry a status and the ticket only, never the guest's details.
+// prefill_checkout (card venues): the same chain up to checkoutContact, never checkoutComplete: the link
+// then opens at the card step and the guest only enters the card on ontopo's own page.
+// Answers carry a status and the ticket or link only, never the guest's details.
 import { ontopoClient, readCheckoutPage } from "./api/ontopo-client.js";
 
 export { readCheckoutPage };
@@ -40,7 +42,8 @@ export async function openCheckout({ venue_id, date, time, partySize, areaPrefer
       page.slug, date, hhmm, partySize, area.id, avail.availability_id, locale, venue_id);
     const info = await client.getCheckoutInfo(checkout_id);
     if (!info) return { status: "failed" };
-    return { status: "ready", checkout_id, needCredit: info.needCredit, skipVerification: info.skipVerification, area: area.name };
+    return { status: "ready", checkout_id, needCredit: info.needCredit, skipVerification: info.skipVerification,
+      expiresIn: info.expiresIn, area: area.name };
   } catch (err) {
     console.error(`[ontopo] book: checkout for ${venue_id} failed: ${err.message}`);
     return { status: "failed" };
@@ -54,34 +57,58 @@ function validInput({ venue_id, date, time, partySize, customer }) {
     /^0\d{8,9}$/.test(toLocalPhone(customer?.phone));
 }
 
-/** Never retried by the caller: one call = at most one booking. */
-export async function bookTable(args, client = ontopoClient) {
-  if (!validInput(args)) return { status: "failed" };
-  const { customer } = args;
-
-  // Reuse the summary's checkout while ontopo still serves it; otherwise open a new one for the same slot.
-  let checkout = null;
+/** Reuse the given checkout while ontopo still serves it; otherwise open a new one for the same slot. */
+async function ensureCheckout(args, client) {
   if (args.checkout_id && CHECKOUT.test(args.checkout_id)) {
     const info = await client.getCheckoutInfo(args.checkout_id);
-    if (info) checkout = { status: "ready", checkout_id: args.checkout_id, ...info };
+    if (info) return { status: "ready", checkout_id: args.checkout_id, ...info };
   }
-  if (!checkout) checkout = await openCheckout(args, client);
-  if (checkout.status !== "ready") return { status: checkout.status };
-  if (checkout.needCredit) return { status: "needs_card" };
-  if (!checkout.skipVerification) return { status: "needs_verification" };
+  return openCheckout(args, client);
+}
 
-  const contacted = await client.checkoutContact({
+/** The guest's details on a checkout (ontopo's form, region il). False when ontopo refuses them. */
+function sendContact({ customer }, checkout_id, client) {
+  return client.checkoutContact({
     first_name: customer.first_name.trim(),
     last_name: (customer.last_name || "").trim(),
     email: customer.email,
     phone: toLocalPhone(customer.phone),
     region_code: "il",
-    checkout_id: checkout.checkout_id,
+    checkout_id,
   });
-  if (!contacted) return { status: "failed" };
+}
+
+/** Never retried by the caller: one call = at most one booking. */
+export async function bookTable(args, client = ontopoClient) {
+  if (!validInput(args)) return { status: "failed" };
+  const { customer } = args;
+
+  const checkout = await ensureCheckout(args, client);
+  if (checkout.status !== "ready") return { status: checkout.status };
+  if (checkout.needCredit) return { status: "needs_card" };
+  if (!checkout.skipVerification) return { status: "needs_verification" };
+
+  if (!await sendContact(args, checkout.checkout_id, client)) return { status: "failed" };
   const ticket = await client.checkoutComplete({ comments: "", email: customer.email, checkout_id: checkout.checkout_id });
   if (!ticket || !TICKET.test(ticket.ticketId)) return { status: "failed" };
   return { status: "confirmed", reference: ticket.ticketId, manage_url: ticket.ticketUrl };
+}
+
+/**
+ * Card venues: put the guest's details on a checkout and return its link, so the guest only enters the card.
+ * Never completes anything: nothing is booked until the guest has entered a card on ontopo's page.
+ */
+export async function prefillCheckout(args, client = ontopoClient) {
+  if (!validInput(args)) return { status: "failed" };
+
+  const checkout = await ensureCheckout(args, client);
+  if (checkout.status !== "ready") return { status: checkout.status };
+  if (!checkout.needCredit) return { status: "no_card" };
+  if (!checkout.skipVerification) return { status: "needs_verification" };
+
+  if (!await sendContact(args, checkout.checkout_id, client)) return { status: "failed" };
+  return { status: "prefilled", checkout_url: `https://s1.ontopo.com/${args.locale || "he"}/checkout/${checkout.checkout_id}`,
+    expires_in: checkout.expiresIn ?? null };
 }
 
 export async function cancelBooking({ reference }, client = ontopoClient) {
