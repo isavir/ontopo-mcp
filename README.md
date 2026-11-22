@@ -35,6 +35,14 @@ Create a direct checkout link for a specific seating area and time slot.
 
 **Returns:** A direct checkout URL (`s1.ontopo.com/checkout/...`) ready to complete the booking. Link expires in ~15 minutes.
 
+### `prefill_checkout`
+
+For a venue that asks for a credit card: open a checkout for the exact slot, put the guest's details on it and return its link, so the guest only enters the card on Ontopo's page. Never books and never completes the checkout.
+
+**Parameters:** as `book_table`: `venue_id`, `date`, `time`, `partySize`, `areaPreference`, `checkout_id`, `locale` (the link's language), `customer` (`first_name`, `last_name`, `phone`, `email`).
+
+**Returns:** `{status, checkout_url, expires_in}` with `status` one of `prefilled`, `slot_taken`, `no_card` (the venue asks for no card), `needs_verification`, `failed`. `expires_in` is in seconds and may be `null`. The guest's details are never in the answer.
+
 ## Setup
 
 ### Prerequisites
@@ -81,6 +89,7 @@ src/
   tools/
     search-availability.js     # search_restaurant_availability tool
     create-checkout-link.js    # create_checkout_link tool
+    prefill-checkout.js        # prefill_checkout tool
 ```
 
 ### How it works

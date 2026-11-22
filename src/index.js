@@ -6,6 +6,7 @@ import { searchAvailabilityTool } from "./tools/search-availability.js";
 import { createCheckoutLinkTool } from "./tools/create-checkout-link.js";
 import { bookTableTool } from "./tools/book-table.js";
 import { cancelBookingTool } from "./tools/cancel-booking.js";
+import { prefillCheckoutTool } from "./tools/prefill-checkout.js";
 
 const server = new McpServer({
   name: "ontopo",
@@ -28,8 +29,8 @@ server.tool(
   createCheckoutLinkTool.execute
 );
 
-// Register book_table and cancel_booking (writes; MCP hints say so)
-for (const tool of [bookTableTool, cancelBookingTool]) {
+// Register book_table, cancel_booking and prefill_checkout (writes; MCP hints say so)
+for (const tool of [bookTableTool, cancelBookingTool, prefillCheckoutTool]) {
   server.registerTool(tool.name,
     { description: tool.description, inputSchema: tool.inputSchema, annotations: tool.annotations },
     tool.execute);

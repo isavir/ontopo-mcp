@@ -18,8 +18,9 @@ src/api/ontopo-client.js      — HTTP client: venue search, profile, page conte
 src/tools/search-availability.js — search_restaurant_availability tool
 src/availability.js           — reads one availability_search answer (pure; tested in test/)
 src/tools/create-checkout-link.js — create_checkout_link tool (direct booking URLs; also checkout_id, needCredit, skipVerification)
-src/book.js                   — book_table / cancel_booking logic (pure, injectable client; tested in test/)
+src/book.js                   — book_table / cancel_booking / prefill_checkout logic (pure, injectable client; tested in test/)
 src/tools/book-table.js, src/tools/cancel-booking.js — book in chat after the user confirmed (Kvali KVA-92)
+src/tools/prefill-checkout.js — prefill_checkout: card venues, guest details on a checkout, link returned, never completed
 ```
 
 ## Key Concepts
@@ -30,6 +31,7 @@ src/tools/book-table.js, src/tools/cancel-booking.js — book in chat after the 
 - **Checkout flow**: A second `availability_search` call with `area` + `availability_id` creates a checkout session, returning a `checkout_id` for `https://s1.ontopo.com/{locale}/checkout/{id}`
 - **Phone-only venues**: `availability_search` answers `method: "phone"` with no areas → `availability: {available: false, phone_only: true, phone}`. An answer without areas is never `available: true`
 - **Booking without the page (KVA-92)**: the checkout page is server-rendered with `needCredit` (card/deposit) and `skipVerification` (no SMS code). When both allow it: `POST s1.ontopo.com/api/checkoutContact` (guest; email required) → `POST s1.ontopo.com/api/checkoutComplete` → `ticketId`/`ticketUrl`. Cancel: `POST s2.ontopo.com/api/ticketReply {action:"cancel", ticketId}` (any anonymous token: the ticket id alone cancels, so keep it out of logs). Card or SMS-code checkouts are never completed; answers never carry the guest's details. `book_table` books exactly the given time, never ontopo's recommended one
+- **Card venues, details prefilled (2026-11-23)**: `prefill_checkout` runs the same chain up to `checkoutContact` and returns `s1.ontopo.com/{locale}/checkout/{id}` (`status: prefilled`, `checkout_url`, `expires_in` seconds). It never calls `checkoutComplete`: the link opens at the card step (step 2 of 3), so the guest only enters the card on ontopo's page. Only for `needCredit` + `skipVerification` checkouts (`no_card` / `needs_verification` otherwise). The guest's details are never returned or logged
 - **Tags**: Defined in shift data `shifts.tags`, used to mark closed days (`action: "disabled"`), special events, or size restrictions
 
 ## Ontopo API Endpoints
